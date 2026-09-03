@@ -56,11 +56,16 @@ function headers(apiKey: string): Record<string, string> {
 /** Unsere Rollen heißen bei Gemini "user" und "model". */
 function toContents(request: ChatRequest) {
   return request.messages
-    .filter((message) => message.content.trim().length > 0)
-    .map((message) => ({
-      role: message.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: message.content }],
-    }));
+    .filter((message) => message.content.trim().length > 0 || (message.audio && message.audio.data))
+    .map((message) => {
+      const parts: { text?: string; inlineData?: { mimeType: string; data: string } }[] = [];
+      // Audio zuerst, direkt als Bytes – keine Transkription dazwischen.
+      if (message.audio?.data) {
+        parts.push({ inlineData: { mimeType: message.audio.mimeType, data: message.audio.data } });
+      }
+      if (message.content.trim()) parts.push({ text: message.content });
+      return { role: message.role === 'assistant' ? 'model' : 'user', parts };
+    });
 }
 
 async function streamChat(request: ChatRequest): Promise<string> {
@@ -253,6 +258,7 @@ export const geminiProvider: Provider = {
   defaultChatModel: MODELS[0].id,
   defaultLookupModel: MODELS[0].id,
   models: MODELS,
+  supportsAudioInput: true,
   streamChat,
   lookup,
   listModels,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Area, Chat, Message, ProviderId, Role, Settings } from './types';
+import type { Area, Chat, Message, MessageAudio, ProviderId, Role, Settings } from './types';
 import { KEYS, load, save } from './storage';
 import { newId } from './id';
 import { PROVIDERS } from './ai';
@@ -83,7 +83,7 @@ export interface Store {
   deleteChat: (id: string) => void;
   renameChat: (id: string, title: string) => void;
 
-  addMessage: (chatId: string, role: Role, content: string) => Message;
+  addMessage: (chatId: string, role: Role, content: string, audio?: MessageAudio) => Message;
   patchMessage: (chatId: string, messageId: string, patch: Partial<Message>) => void;
 
   saveSettings: (patch: Partial<Settings>) => void;
@@ -103,7 +103,24 @@ export function useStore(): Store {
   const [activeChatId, setActiveChatId] = useState<string | null>(() => load<string | null>(KEYS.activeChat, null));
 
   useEffect(() => save(KEYS.areas, areas), [areas]);
-  useEffect(() => save(KEYS.chats, chats), [chats]);
+  // Audio-Rohdaten fliegen vor dem Speichern raus: Sprachnachrichten können
+  // pro Aufnahme mehrere Hundert KB Base64 sein, und die ganze `chats`-Liste
+  // landet als ein JSON-Blob im localStorage. Ohne diesen Schnitt würde eine
+  // volle Quota das Speichern des kompletten App-Zustands stillschweigend
+  // ausbremsen (siehe storage.ts). Im Speicher (React-State) bleibt das
+  // Audio für die laufende Sitzung erhalten – nur nach einem Neuladen ist
+  // die Aufnahme selbst weg, der Rest des Gesprächs nicht.
+  useEffect(() => {
+    const sanitized = chats.map((chat) => ({
+      ...chat,
+      messages: chat.messages.map((message) =>
+        message.audio?.data
+          ? { ...message, audio: { mimeType: message.audio.mimeType, durationMs: message.audio.durationMs } }
+          : message,
+      ),
+    }));
+    save(KEYS.chats, sanitized);
+  }, [chats]);
   useEffect(() => save(KEYS.settings, settings), [settings]);
   useEffect(() => save(KEYS.activeArea, activeAreaId), [activeAreaId]);
   useEffect(() => save(KEYS.activeChat, activeChatId), [activeChatId]);
@@ -169,8 +186,8 @@ export function useStore(): Store {
     setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
   }, []);
 
-  const addMessage = useCallback((chatId: string, role: Role, content: string) => {
-    const message: Message = { id: newId(), role, content, createdAt: Date.now() };
+  const addMessage = useCallback((chatId: string, role: Role, content: string, audio?: MessageAudio) => {
+    const message: Message = { id: newId(), role, content, createdAt: Date.now(), audio };
     setChats((prev) =>
       prev.map((c) =>
         c.id === chatId ? { ...c, messages: [...c.messages, message], updatedAt: Date.now() } : c,

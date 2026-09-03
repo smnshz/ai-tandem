@@ -1,5 +1,16 @@
 export type Role = 'user' | 'assistant';
 
+export interface MessageAudio {
+  mimeType: string;
+  /**
+   * Base64-kodierte Audiodaten. Wird bewusst NICHT dauerhaft gespeichert
+   * (siehe state.ts) – nach einem Neuladen der Seite ist die Aufnahme selbst
+   * weg, nur mimeType/durationMs bleiben als Hinweis erhalten.
+   */
+  data?: string;
+  durationMs: number;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -7,6 +18,12 @@ export interface Message {
   createdAt: number;
   /** Gesetzt, wenn die Antwort abgebrochen wurde oder ein Fehler auftrat. */
   error?: string;
+  /**
+   * Direkt aufgenommene Sprachnachricht (nur beim Nutzer). Geht ohne lokale
+   * Transkription als Audio an die KI – die Aussprache-Fehleranfälligkeit
+   * einer Zwischen-Transkription entfällt so.
+   */
+  audio?: MessageAudio;
 }
 
 export interface Chat {

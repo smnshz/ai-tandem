@@ -220,6 +220,7 @@ a { color: var(--accent); }
 /* ---------- Composer ---------- */
 
 .composer {
+  position: relative;
   display: flex;
   gap: 8px;
   align-items: flex-end;
@@ -240,6 +241,43 @@ a { color: var(--accent); }
 }
 
 .composer textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.mic-btn { font-size: 18px; flex: 0 0 auto; }
+
+.mic-error {
+  position: absolute;
+  bottom: 100%;
+  left: 14px;
+  right: 14px;
+  margin: 0 0 6px;
+}
+
+.composer-recording {
+  align-items: center;
+  position: relative;
+}
+
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex: 0 0 auto;
+  animation: rec-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.rec-time { flex: 1 1 auto; font-variant-numeric: tabular-nums; }
+
+.voice-msg {
+  display: block;
+  width: min(260px, 70vw);
+  height: 36px;
+}
 
 /* ---------- Buttons ---------- */
 
