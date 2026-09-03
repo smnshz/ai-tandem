@@ -3,16 +3,20 @@
  * einhalten muss (siehe buildSystemPrompt in prompt.ts): erst eine Korrektur
  * meiner letzten Nachricht, dann – hinter dem ##ANTWORT##-Marker – die
  * eigentliche Gesprächsantwort. Dieses Modul parst genau dieses Format.
+ *
+ * Das Modell hält Formatvorgaben nicht immer aufs Zeichen genau ein (z.B.
+ * wenn der Nutzer-Kontext einen eigenen, abweichend formulierten
+ * Korrektur-Ablauf beschreibt). Das Parsen ist deshalb bewusst tolerant:
+ * lieber die Korrektur roh anzeigen als sie bei kleinen Abweichungen
+ * stillschweigend zu verschlucken.
  */
 
 export const KORREKTUR_MARKER = '##KORREKTUR##';
 export const ANTWORT_MARKER = '##ANTWORT##';
 
-export interface Correction {
-  quote: string;
-  corrected: string;
-  explanation: string;
-}
+export type Correction =
+  | { kind: 'fields'; quote: string; corrected: string; explanation: string }
+  | { kind: 'raw'; text: string };
 
 export interface ParsedReply {
   /** null = (noch) nicht bekannt, 'none' = kein Fehler, sonst die Korrektur. */
@@ -23,31 +27,48 @@ export interface ParsedReply {
   replyStarted: boolean;
 }
 
+// Marker robust erkennen, auch wenn das Modell sie in Markdown einpackt
+// (**##ANTWORT##**, ### Antwort, `##Antwort##` …) statt sie wörtlich zu übernehmen.
+function findMarker(raw: string, name: string): { index: number; length: number } | null {
+  // Erlaubt sowohl "##NAME##" als auch Varianten wie "**##NAME##**" oder "### Name".
+  const re = new RegExp(`^[ \\t]*[*_\`>-]*[ \\t]*#{0,3}[ \\t]*${name}[ \\t]*#{0,3}[ \\t]*[*_\`>-]*[ \\t]*$`, 'im');
+  const match = re.exec(raw);
+  return match ? { index: match.index, length: match[0].length } : null;
+}
+
+// Feldlabel tolerant matchen: führende Markdown-/Aufzählungszeichen und
+// Groß-/Kleinschreibung sind egal, solange "LABEL: Wert" erkennbar bleibt.
 function matchField(block: string, label: string): string | null {
-  const match = new RegExp(`^\\s*${label}:\\s*(.*)$`, 'im').exec(block);
-  const value = match?.[1]?.trim().replace(/^[„"]|[“"]$/g, '');
+  const re = new RegExp(`^[ \\t*_>-]*${label}[ \\t]*:[ \\t]*(.*)$`, 'im');
+  const match = re.exec(block);
+  const value = match?.[1]?.trim().replace(/^[„"“]+|[„"“]+$/g, '').replace(/\*+$/g, '').trim();
   return value || null;
 }
 
 /** Parst den (ggf. noch streamenden) Rohtext einer Assistenten-Nachricht. */
 export function parseStructuredReply(raw: string): ParsedReply {
-  const korrekturIdx = raw.indexOf(KORREKTUR_MARKER);
-  const antwortIdx = raw.indexOf(ANTWORT_MARKER);
-
-  if (antwortIdx < 0) {
+  const antwortMarker = findMarker(raw, 'ANTWORT');
+  if (!antwortMarker) {
     return { correction: null, reply: '', replyStarted: false };
   }
 
-  const correctionBlock = raw.slice(korrekturIdx >= 0 ? korrekturIdx + KORREKTUR_MARKER.length : 0, antwortIdx);
-  const reply = raw.slice(antwortIdx + ANTWORT_MARKER.length).trim();
+  const beforeAntwort = raw.slice(0, antwortMarker.index);
+  const korrekturMarker = findMarker(beforeAntwort, 'KORREKTUR');
+  const correctionBlock = beforeAntwort.slice(korrekturMarker ? korrekturMarker.index + korrekturMarker.length : 0);
+  const reply = raw.slice(antwortMarker.index + antwortMarker.length).trim();
 
   let correction: ParsedReply['correction'] = 'none';
-  if (!/^\s*KEINE\s*$/im.test(correctionBlock)) {
+  const trimmedBlock = correctionBlock.trim();
+  if (trimmedBlock && !/^[*_>-]*\s*KEINE\b/im.test(trimmedBlock)) {
     const quote = matchField(correctionBlock, 'ZITAT');
-    const corrected = matchField(correctionBlock, 'KORRIGIERT');
-    const explanation = matchField(correctionBlock, 'ERKLÄRUNG');
+    const corrected = matchField(correctionBlock, 'KORRIGIERT(?:E|ES|ER)?');
+    const explanation = matchField(correctionBlock, 'ERKL[ÄA]RUNG');
     if (quote || corrected || explanation) {
-      correction = { quote: quote ?? '', corrected: corrected ?? '', explanation: explanation ?? '' };
+      correction = { kind: 'fields', quote: quote ?? '', corrected: corrected ?? '', explanation: explanation ?? '' };
+    } else {
+      // Modell ist inhaltlich der Korrektur-Vorgabe gefolgt, aber nicht den
+      // exakten Feldnamen – lieber roh zeigen als die Korrektur verlieren.
+      correction = { kind: 'raw', text: trimmedBlock };
     }
   }
 

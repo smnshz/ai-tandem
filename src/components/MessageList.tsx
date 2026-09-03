@@ -59,10 +59,18 @@ export function MessageList({
               )}
               {parsed && parsed.correction && parsed.correction !== 'none' && (
                 <div className="correction">
-                  {parsed.correction.quote && <div className="correction-quote">„{parsed.correction.quote}“</div>}
-                  {parsed.correction.corrected && <div className="correction-fixed">→ {parsed.correction.corrected}</div>}
-                  {parsed.correction.explanation && (
-                    <div className="correction-explain">{parsed.correction.explanation}</div>
+                  {parsed.correction.kind === 'fields' ? (
+                    <>
+                      {parsed.correction.quote && <div className="correction-quote">„{parsed.correction.quote}“</div>}
+                      {parsed.correction.corrected && (
+                        <div className="correction-fixed">→ {parsed.correction.corrected}</div>
+                      )}
+                      {parsed.correction.explanation && (
+                        <div className="correction-explain">{parsed.correction.explanation}</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="correction-fixed">{parsed.correction.text}</div>
                   )}
                   <hr className="correction-divider" />
                 </div>
