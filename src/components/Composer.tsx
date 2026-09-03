@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ArrowUp, Check, Mic, Square, Trash2 } from 'lucide-react';
 import { startRecording, type AudioRecorder, type RecordedAudio } from '../lib/audio';
 
 export interface SendPayload {
@@ -15,6 +16,8 @@ interface Props {
   onSend: (payload: SendPayload) => void;
   onStop: () => void;
 }
+
+const MAX_TEXTAREA_HEIGHT = 140;
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -56,7 +59,7 @@ export function Composer({ disabled, busy, placeholder, canRecordAudio, onSend, 
 
   const autoGrow = (element: HTMLTextAreaElement) => {
     element.style.height = 'auto';
-    element.style.height = Math.min(element.scrollHeight, 160) + 'px';
+    element.style.height = Math.min(element.scrollHeight, MAX_TEXTAREA_HEIGHT) + 'px';
   };
 
   const beginRecording = async () => {
@@ -84,55 +87,94 @@ export function Composer({ disabled, busy, placeholder, canRecordAudio, onSend, 
     setRecorder(null);
   };
 
-  if (recorder) {
-    return (
-      <div className="composer composer-recording">
-        <span className="rec-dot" aria-hidden="true" />
-        <span className="rec-time">Aufnahme … {formatElapsed(elapsedMs)}</span>
-        <button className="btn btn-secondary" onClick={cancelRecording} title="Verwerfen">
-          Verwerfen
-        </button>
-        <button className="btn" onClick={() => void stopAndSend()} title="Aufnahme senden">
-          ✔ Senden
-        </button>
-      </div>
-    );
-  }
+  const showMic = canRecordAudio && !busy && !value.trim();
+  const canSend = !disabled && value.trim().length > 0;
 
   return (
     <div className="composer">
-      {micError && <p className="error tiny mic-error">{micError}</p>}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        rows={1}
-        placeholder={placeholder}
-        disabled={disabled}
-        onChange={(event) => {
-          setValue(event.target.value);
-          autoGrow(event.target);
-        }}
-        onKeyDown={handleKeyDown}
-      />
-      {canRecordAudio && !busy && !value.trim() && (
-        <button
-          className="icon-btn mic-btn"
-          onClick={() => void beginRecording()}
-          disabled={disabled}
-          title="Sprachnachricht aufnehmen – geht direkt als Audio an die KI"
-        >
-          🎤
-        </button>
-      )}
-      {busy ? (
-        <button className="btn btn-secondary" onClick={onStop}>
-          Stopp
-        </button>
-      ) : (
-        <button className="btn" onClick={submitText} disabled={disabled || !value.trim()}>
-          Senden
-        </button>
-      )}
+      <div className="composer__inner">
+        {micError && <p className="composer__note">{micError}</p>}
+
+        {recorder ? (
+          <div className="recorder">
+            <span className="recorder__dot" aria-hidden="true" />
+            <span className="recorder__time">Aufnahme läuft · {formatElapsed(elapsedMs)}</span>
+            <div className="recorder__actions">
+              <button
+                type="button"
+                className="btn btn--quiet btn--icon"
+                onClick={cancelRecording}
+                title="Aufnahme verwerfen"
+                aria-label="Aufnahme verwerfen"
+              >
+                <Trash2 />
+              </button>
+              <button
+                type="button"
+                className="btn btn--icon"
+                onClick={() => void stopAndSend()}
+                title="Aufnahme senden"
+                aria-label="Aufnahme senden"
+              >
+                <Check />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="composer__field">
+            <textarea
+              ref={textareaRef}
+              className="composer__input"
+              value={value}
+              rows={1}
+              placeholder={placeholder}
+              disabled={disabled}
+              aria-label="Nachricht"
+              onChange={(event) => {
+                setValue(event.target.value);
+                autoGrow(event.target);
+              }}
+              onKeyDown={handleKeyDown}
+            />
+            <div className="composer__actions">
+              {showMic && (
+                <button
+                  type="button"
+                  className="btn btn--quiet btn--icon"
+                  onClick={() => void beginRecording()}
+                  disabled={disabled}
+                  title="Sprachnachricht aufnehmen – geht direkt als Audio an die KI"
+                  aria-label="Sprachnachricht aufnehmen"
+                >
+                  <Mic />
+                </button>
+              )}
+              {busy ? (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon composer__send"
+                  onClick={onStop}
+                  title="Antwort stoppen"
+                  aria-label="Antwort stoppen"
+                >
+                  <Square />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--icon composer__send"
+                  onClick={submitText}
+                  disabled={!canSend}
+                  title="Senden"
+                  aria-label="Senden"
+                >
+                  <ArrowUp />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

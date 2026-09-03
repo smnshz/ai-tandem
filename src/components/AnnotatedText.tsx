@@ -100,7 +100,7 @@ export function AnnotatedText({ text, lang, isActive, onSelect }: Props) {
           <span
             key={index}
             data-token={index}
-            className={'tok' + (index >= from && index <= to ? ' tok-selected' : '')}
+            className={'tok' + (index >= from && index <= to ? ' tok--selected' : '')}
             onPointerDown={(event) => handlePointerDown(event, index)}
             role="button"
             tabIndex={-1}

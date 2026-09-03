@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import type { Area } from '../lib/types';
 import { LANGUAGES } from '../lib/languages';
+import { Dialog } from './Dialog';
 
 interface Props {
   /** null = neuer Bereich */
@@ -27,66 +29,96 @@ export function AreaDialog({ area, canDelete, onSave, onDelete, onClose }: Props
   };
 
   return (
-    <div className="modal-backdrop" onPointerDown={onClose}>
-      <div className="modal" onPointerDown={(event) => event.stopPropagation()}>
-        <h2>{area ? 'Bereich bearbeiten' : 'Neuer Bereich'}</h2>
-
-        <label>
-          Name
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="z.B. Chinesisch" />
-        </label>
-
-        <div className="row">
-          <label>
-            Ich lerne
-            <select value={targetLang} onChange={(event) => setTargetLang(event.target.value)}>
-              {LANGUAGES.map((language) => (
-                <option key={language.code} value={language.code}>
-                  {language.label}
-                </option>
-              ))}
-            </select>
+    <Dialog
+      title={area ? 'Bereich bearbeiten' : 'Neuer Bereich'}
+      onClose={onClose}
+      footerStart={
+        canDelete && area ? (
+          <button type="button" className="btn btn--danger" onClick={onDelete}>
+            <Trash2 />
+            Löschen
+          </button>
+        ) : undefined
+      }
+      footerEnd={
+        <>
+          <button type="button" className="btn btn--ghost" onClick={onClose}>
+            Abbrechen
+          </button>
+          <button type="button" className="btn" onClick={save}>
+            Speichern
+          </button>
+        </>
+      }
+    >
+      <div className="field-group">
+        <div className="field">
+          <label className="field__label" htmlFor="area-name">
+            Name
           </label>
-          <label>
-            Erklärungen auf
-            <select value={nativeLang} onChange={(event) => setNativeLang(event.target.value)}>
-              {LANGUAGES.map((language) => (
-                <option key={language.code} value={language.code}>
-                  {language.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <input
+            id="area-name"
+            className="input"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="z.B. Chinesisch"
+          />
         </div>
 
-        <label>
-          Initialer Prompt (Rolle, Situation, Niveau)
+        <div className="field-row">
+          <div className="field">
+            <label className="field__label" htmlFor="area-target">
+              Ich lerne
+            </label>
+            <select
+              id="area-target"
+              className="select"
+              value={targetLang}
+              onChange={(event) => setTargetLang(event.target.value)}
+            >
+              {LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="area-native">
+              Erklärungen auf
+            </label>
+            <select
+              id="area-native"
+              className="select"
+              value={nativeLang}
+              onChange={(event) => setNativeLang(event.target.value)}
+            >
+              {LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="area-prompt">
+            Initialer Prompt (Rolle, Situation, Niveau)
+          </label>
           <textarea
-            rows={7}
+            id="area-prompt"
+            className="textarea"
+            rows={6}
             value={systemPrompt}
             onChange={(event) => setSystemPrompt(event.target.value)}
             placeholder="z.B. Du bist Barista in einem Café in Taipeh. Ich bin Anfänger und bestelle etwas."
           />
-        </label>
-        <p className="muted tiny">
-          Die Tandem-Regeln (kurze Antworten, keine Übersetzung im Text, Korrekturzeile) kommen automatisch dazu.
-        </p>
-
-        <div className="modal-foot">
-          {canDelete && area && (
-            <button className="btn btn-danger" onClick={onDelete}>
-              Bereich löschen
-            </button>
-          )}
-          <span className="spacer" />
-          <button className="btn btn-secondary" onClick={onClose}>
-            Abbrechen
-          </button>
-          <button className="btn" onClick={save}>
-            Speichern
-          </button>
+          <p className="field__hint">
+            Die Tandem-Regeln (kurze Antworten, keine Übersetzung im Text, Korrekturzeile) kommen automatisch dazu.
+          </p>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

@@ -21,9 +21,9 @@ angezeigt.
 
 Die KI wird nur gefragt, wenn du sie brauchst:
 
-- **„im Satzkontext per KI erklären"** – wenn ein Wort mehrdeutig ist,
-- **„fehlende Wörter per KI klären"** – wenn das Wörterbuch etwas nicht kennt,
-- **„übersetzen"** unter einer Nachricht – für eine flüssige Übersetzung,
+- **„Im Satzkontext erklären"** – wenn ein Wort mehrdeutig ist,
+- **„Fehlende Wörter klären"** – wenn das Wörterbuch etwas nicht kennt,
+- **„Übersetzen"** unter einer Nachricht – für eine flüssige Übersetzung,
 - und natürlich für das Gespräch selbst.
 
 KI-Ergebnisse werden lokal zwischengespeichert. Für andere Sprachpaare als
@@ -37,9 +37,9 @@ Chinesisch → Deutsch gibt es kein Wörterbuch; dort läuft jedes Nachschlagen
 - **Gespräch**: ein Chat innerhalb eines Bereichs. Beliebig viele pro Bereich.
 - **Antippen**: ein Zeichen antippen → Pinyin + Bedeutung. Über mehrere Zeichen
   ziehen → Wortzerlegung des Ausschnitts.
-- **🔊** liest Text über die Sprachausgabe des Browsers vor (Qualität und
-  verfügbare Stimmen hängen vom Betriebssystem ab).
-- **🎤 Audio-Modus**: Mikrofon-Symbol im Eingabefeld antippen, sprechen,
+- **Vorlesen** gibt Text über die Sprachausgabe des Browsers aus (Qualität
+  und verfügbare Stimmen hängen vom Betriebssystem ab).
+- **Audio-Modus**: Mikrofon-Symbol im Eingabefeld antippen, sprechen,
   nochmal antippen zum Senden. Die Aufnahme geht als Audiodatei direkt an die
   KI – **ohne** lokale Spracherkennung dazwischen. Gerade bei noch unsicherer
   Aussprache ist das zuverlässiger als der Umweg über eine Transkription, die
@@ -51,7 +51,7 @@ Chinesisch → Deutsch gibt es kein Wörterbuch; dort läuft jedes Nachschlagen
 ## API-Key
 
 Die App spricht die KI **direkt aus dem Browser** an. Der Key steht deshalb
-nicht im Repository, sondern wird zur Laufzeit eingetragen: **⚙ Einstellungen**
+nicht im Repository, sondern wird zur Laufzeit eingetragen: **Einstellungen**
 → Anbieter wählen → Key einfügen → speichern.
 
 | Anbieter | Key holen | Kosten |
@@ -135,8 +135,25 @@ src/
   components/
     AnnotatedText   antippbarer Text (Tap = ein Zeichen, Ziehen = mehrere)
     LookupPopup     Karte bzw. Bottom-Sheet mit Umschrift/Bedeutung
+    Dialog          gemeinsame Hülle für Dialoge (Kopf, Inhalt, Fußzeile)
     MessageList, Composer, Sidebar, AreaDialog, SettingsDialog
+  styles.css        Design-Tokens (Farben, Radien, Abstände) + Layout
 ```
+
+## Oberfläche
+
+Die Gestaltung hängt an einem kleinen Satz Tokens in `src/styles.css`:
+Flächen, eine Linienfarbe, ein Akzent sowie je eine Radien- und
+Abstandsskala. Helles und dunkles Farbschema folgen der Systemeinstellung.
+
+- Icons kommen einheitlich aus [Lucide](https://lucide.dev) – Größe und
+  Strichstärke sind zentral im `LucideProvider` in `src/main.tsx` gesetzt.
+- Buttons haben genau vier Varianten (`btn`, `btn--ghost`, `btn--quiet`,
+  `btn--danger`) und auf Touch-Geräten mindestens 44px Grundfläche.
+- Dialoge nutzen dieselbe Hülle: Hauptaktionen rechts, Nebenaktionen links;
+  auf dem Handy werden sie zur Vollbildseite mit gestapelten Buttons.
+- Der Viewport ist auf feste Skalierung gestellt und Eingabefelder haben 16px
+  Schriftgröße, damit iOS beim Antippen nicht hineinzoomt.
 
 Einen weiteren Anbieter einzubauen heißt: ein Modul in `src/lib/providers/`
 anlegen, das `Provider` implementiert, und es in `ai.ts` registrieren.
@@ -158,7 +175,7 @@ nur die Basis-URL anzupassen.
 - Der KI-Cache ist kontextfrei: gleiche Zeichenfolge = gleicher Cache-Eintrag.
 - Die Wortzerlegung nimmt den längsten passenden Wörterbucheintrag. Das ist bei
   Chinesisch fast immer richtig, aber nicht immer – im Zweifel hilft „im
-  Satzkontext per KI erklären".
+  Satzkontext erklären".
 - Das Wörterbuch enthält Einträge bis vier Zeichen Länge; längere Ausdrücke
   werden aus kürzeren zusammengesetzt.
 - Sprachnachrichten (Audio-Modus) werden nicht dauerhaft gespeichert – nach

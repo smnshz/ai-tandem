@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { BookOpen, LoaderCircle, Sparkles, Square, TriangleAlert, Volume2, X } from 'lucide-react';
 import type { LookupResult } from '../lib/types';
 import type { LanguageDef } from '../lib/languages';
 import { canSpeak, speak, stopSpeaking } from '../lib/speech';
@@ -21,7 +22,7 @@ interface Props {
   onAskAi: () => void;
 }
 
-const MOBILE_BREAKPOINT = 640;
+const MOBILE_BREAKPOINT = 760;
 
 export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -77,16 +78,18 @@ export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
   return (
     <>
       <div className="popup-backdrop" onPointerDown={onClose} />
-      <div ref={cardRef} className={isSheet ? 'lookup lookup-sheet' : 'lookup'} style={style} role="dialog">
-        <header className="lookup-head">
-          <span className="lookup-query" lang={targetLang.code}>
+      <div ref={cardRef} className={isSheet ? 'lookup lookup--sheet' : 'lookup'} style={style} role="dialog">
+        <header className="lookup__head">
+          <span className="lookup__query" lang={targetLang.code}>
             {state.selection}
           </span>
-          <div className="lookup-actions">
+          <div className="lookup__actions">
             {speakable && (
               <button
-                className="icon-btn"
+                type="button"
+                className="btn btn--quiet btn--icon btn--sm"
                 title={isSpeaking ? 'Stoppen' : 'Vorlesen'}
+                aria-label={isSpeaking ? 'Stoppen' : 'Vorlesen'}
                 onClick={() => {
                   if (isSpeaking) {
                     stopSpeaking();
@@ -97,22 +100,38 @@ export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
                   speak(state.selection, targetLang.speechLang, { onEnd: () => setIsSpeaking(false) });
                 }}
               >
-                {isSpeaking ? '⏹' : '🔊'}
+                {isSpeaking ? <Square /> : <Volume2 />}
               </button>
             )}
 
-            <button className="icon-btn" title="Schließen" onClick={onClose}>
-              ✕
+            <button
+              type="button"
+              className="btn btn--quiet btn--icon btn--sm"
+              title="Schließen"
+              aria-label="Schließen"
+              onClick={onClose}
+            >
+              <X />
             </button>
           </div>
         </header>
 
-        {state.status === 'loading' && <p className="muted">Wird nachgeschlagen …</p>}
+        {state.status === 'loading' && (
+          <p className="lookup__status">
+            <LoaderCircle className="spin" size={16} />
+            Wird nachgeschlagen …
+          </p>
+        )}
 
-        {state.status === 'error' && <p className="error">{state.error}</p>}
+        {state.status === 'error' && (
+          <p className="lookup__status lookup__status--error">
+            <TriangleAlert size={16} />
+            {state.error}
+          </p>
+        )}
 
         {state.status === 'done' && state.result && (
-          <div className="lookup-body">
+          <div className="lookup__body">
             <ul className="segments">
               {state.result.segments.map((segment, index) => (
                 <li key={index} className={segment.unknown ? 'seg-unknown' : undefined}>
@@ -126,27 +145,28 @@ export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
             </ul>
 
             {state.result.translation && (
-              <p className="translation">
+              <p className="lookup__translation">
                 <strong>Ganze Auswahl:</strong> {state.result.translation}
               </p>
             )}
-            {state.result.note && <p className="note">{state.result.note}</p>}
+            {state.result.note && <p className="lookup__note">{state.result.note}</p>}
 
-            <div className="lookup-foot">
+            <div className="lookup__foot">
               <span className="badge">
+                {state.result.source === 'dict' ? <BookOpen size={13} /> : <Sparkles size={13} />}
                 {state.result.source === 'dict' ? 'Wörterbuch · offline' : 'KI'}
               </span>
-              <button className="link-btn" onClick={onAskAi}>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={onAskAi}>
+                <Sparkles size={15} />
                 {state.result.incomplete
-                  ? 'fehlende Wörter per KI klären'
+                  ? 'Fehlende Wörter klären'
                   : state.result.source === 'dict'
-                    ? 'im Satzkontext per KI erklären'
-                    : 'noch einmal nachschlagen'}
+                    ? 'Im Satzkontext erklären'
+                    : 'Noch einmal nachschlagen'}
               </button>
             </div>
           </div>
         )}
-
       </div>
     </>
   );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Menu, MessagesSquare, Settings, SquarePen, TriangleAlert } from 'lucide-react';
 import { useStore } from './lib/state';
 import { getLanguage } from './lib/languages';
 import { deriveChatTitle } from './lib/prompt';
@@ -59,7 +60,7 @@ export default function App() {
 
       store.addMessage(chat.id, 'user', text, audio);
       if (chat.messages.length === 0) {
-        store.renameChat(chat.id, text ? deriveChatTitle(text) : '🎤 Sprachnachricht');
+        store.renameChat(chat.id, text ? deriveChatTitle(text) : 'Sprachnachricht');
       }
 
       const placeholder = store.addMessage(chat.id, 'assistant', '');
@@ -259,22 +260,53 @@ export default function App() {
 
       <main className="main">
         <header className="topbar">
-          <button className="icon-btn only-mobile" onClick={() => setSidebarOpen(true)} title="Menü">
-            ☰
+          <button
+            type="button"
+            className="btn btn--quiet btn--icon only-mobile"
+            onClick={() => setSidebarOpen(true)}
+            title="Menü"
+            aria-label="Menü öffnen"
+          >
+            <Menu />
           </button>
-          <div className="topbar-title">
-            <strong>{activeArea?.name ?? 'AI Sprachtandem'}</strong>
-            <span className="muted tiny">{activeChat?.title ?? 'Neues Gespräch'}</span>
+
+          <div className="topbar__title">
+            <span className="topbar__name">{activeArea?.name ?? 'AI Sprachtandem'}</span>
+            <span className="topbar__sub">{activeChat?.title ?? 'Neues Gespräch'}</span>
           </div>
-          <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="Einstellungen">
-            ⚙
-          </button>
+
+          <div className="topbar__actions">
+            <button
+              type="button"
+              className="btn btn--quiet btn--icon"
+              onClick={() => {
+                if (activeArea) store.createChat(activeArea.id);
+                closeLookup();
+                stopSpeech();
+              }}
+              disabled={!activeArea}
+              title="Neues Gespräch"
+              aria-label="Neues Gespräch"
+            >
+              <SquarePen />
+            </button>
+            <button
+              type="button"
+              className="btn btn--quiet btn--icon"
+              onClick={() => setSettingsOpen(true)}
+              title="Einstellungen"
+              aria-label="Einstellungen"
+            >
+              <Settings />
+            </button>
+          </div>
         </header>
 
         {!keyPresent && (
           <div className="banner">
-            Kein API-Key hinterlegt.{' '}
-            <button className="link-btn" onClick={() => setSettingsOpen(true)}>
+            <TriangleAlert size={16} />
+            <span className="banner__text">Kein API-Key hinterlegt.</span>
+            <button type="button" className="link-btn" onClick={() => setSettingsOpen(true)}>
               Jetzt eintragen
             </button>
           </div>
@@ -293,13 +325,16 @@ export default function App() {
           />
         ) : (
           <div className="empty">
+            <span className="empty__icon">
+              <MessagesSquare size={22} />
+            </span>
             <h1>{activeArea?.name ?? 'Sprachtandem'}</h1>
-            <p className="muted">
+            <p>
               Schreib einfach los – {targetLang.label} oder Deutsch. Antworten kommen auf {targetLang.label}.
             </p>
-            <p className="muted tiny">
-              Tipp: einzelne Zeichen antippen zeigt {targetLang.readingName} und Bedeutung. Über mehrere Zeichen
-              ziehen übersetzt den ganzen Ausschnitt.
+            <p className="empty__hint">
+              Einzelne Zeichen antippen zeigt {targetLang.readingName} und Bedeutung. Über mehrere Zeichen ziehen
+              übersetzt den ganzen Ausschnitt.
             </p>
           </div>
         )}
@@ -307,7 +342,7 @@ export default function App() {
         <Composer
           disabled={!activeArea}
           busy={streamingMessageId !== null}
-          placeholder={`Nachricht auf ${targetLang.label} …`}
+          placeholder="Nachricht schreiben …"
           canRecordAudio={audioModeAvailable}
           onSend={(payload) => void send(payload)}
           onStop={stop}
