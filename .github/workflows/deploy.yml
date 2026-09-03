@@ -30,7 +30,11 @@ jobs:
         env:
           # Bei GitHub Pages liegt die App unter /<repo>/.
           BASE_PATH: /${{ github.event.repository.name }}/
+      # enablement: true schaltet Pages beim ersten Lauf selbst auf
+      # "GitHub Actions" um, statt am fehlenden Pages-Setup zu scheitern.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
