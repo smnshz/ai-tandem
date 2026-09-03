@@ -2,16 +2,19 @@ import { useEffect, useRef } from 'react';
 import type { Message } from '../lib/types';
 import type { LanguageDef } from '../lib/languages';
 import { AnnotatedText } from './AnnotatedText';
-import { canSpeak, speak } from '../lib/speech';
+import { canSpeak } from '../lib/speech';
 import { hasSelectableContent } from '../lib/tokenize';
+import { parseStructuredReply } from '../lib/responseFormat';
 
 interface Props {
   messages: Message[];
   targetLang: LanguageDef;
   activeLookupMessageId: string | null;
   streamingMessageId: string | null;
+  speakingMessageId: string | null;
   onSelect: (messageId: string, selection: string, anchor: DOMRect) => void;
   onTranslateMessage: (message: Message) => void;
+  onToggleSpeak: (message: Message) => void;
 }
 
 export function MessageList({
@@ -19,8 +22,10 @@ export function MessageList({
   targetLang,
   activeLookupMessageId,
   streamingMessageId,
+  speakingMessageId,
   onSelect,
   onTranslateMessage,
+  onToggleSpeak,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -31,7 +36,17 @@ export function MessageList({
   return (
     <div className="messages">
       {messages.map((message) => {
-        const annotatable = hasSelectableContent(message.content, targetLang);
+        const isStreaming = streamingMessageId === message.id;
+        const isUser = message.role === 'user';
+        // Bei User-Nachrichten und alten Nachrichten ohne Format-Marker (vor
+        // diesem Feature) ist der ganze Inhalt der "Gesprächstext".
+        const parsed = isUser ? null : parseStructuredReply(message.content);
+        const legacyPlain = !isUser && !parsed!.replyStarted && !isStreaming;
+        const replyText = isUser ? message.content : parsed!.replyStarted ? parsed!.reply : legacyPlain ? message.content : '';
+        const showTyping = !message.audio && !replyText && isStreaming;
+        const annotatable = hasSelectableContent(replyText, targetLang);
+        const isSpeaking = speakingMessageId === message.id;
+
         return (
           <div key={message.id} data-message={message.id} className={`msg msg-${message.role}`}>
             <div className="bubble">
@@ -42,29 +57,37 @@ export function MessageList({
                   <span className="muted tiny">🎤 Sprachnachricht (nach Neuladen nicht mehr abspielbar)</span>
                 )
               )}
-              {message.content ? (
+              {parsed && parsed.correction && parsed.correction !== 'none' && (
+                <div className="correction">
+                  {parsed.correction.quote && <div className="correction-quote">„{parsed.correction.quote}“</div>}
+                  {parsed.correction.corrected && <div className="correction-fixed">→ {parsed.correction.corrected}</div>}
+                  {parsed.correction.explanation && (
+                    <div className="correction-explain">{parsed.correction.explanation}</div>
+                  )}
+                  <hr className="correction-divider" />
+                </div>
+              )}
+              {replyText ? (
                 annotatable ? (
                   <AnnotatedText
-                    text={message.content}
+                    text={replyText}
                     lang={targetLang}
                     isActive={activeLookupMessageId === message.id}
                     onSelect={(selection, anchor) => onSelect(message.id, selection, anchor)}
                   />
                 ) : (
-                  <span className="plain">{message.content}</span>
+                  <span className="plain">{replyText}</span>
                 )
               ) : (
-                !message.audio && streamingMessageId === message.id && (
-                  <span className="typing" aria-label="schreibt" />
-                )
+                showTyping && <span className="typing" aria-label="schreibt" />
               )}
               {message.error && <p className="error tiny">{message.error}</p>}
             </div>
-            {message.content && (
+            {replyText && (
               <div className="msg-tools">
                 {canSpeak() && (
-                  <button className="link-btn" onClick={() => speak(message.content, targetLang.speechLang)}>
-                    🔊 vorlesen
+                  <button className="link-btn" onClick={() => onToggleSpeak(message)}>
+                    {isSpeaking ? '⏹ stoppen' : '🔊 vorlesen'}
                   </button>
                 )}
                 {annotatable && (

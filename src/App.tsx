@@ -5,7 +5,8 @@ import { deriveChatTitle } from './lib/prompt';
 import { describeError, hasApiKey, isAbortError, providerOf, resolveLookup, streamChat } from './lib/ai';
 import { ensureDictionary, supportsOffline } from './lib/dictionary';
 import { canRecordAudio as browserCanRecordAudio, blobToBase64 } from './lib/audio';
-import { canSpeak, speak } from './lib/speech';
+import { canSpeak, speak, stopSpeaking } from './lib/speech';
+import { replyTextOf } from './lib/responseFormat';
 import type { Area, Message, MessageAudio } from './lib/types';
 import { Sidebar } from './components/Sidebar';
 import { MessageList } from './components/MessageList';
@@ -21,6 +22,7 @@ export default function App() {
   const [areaDialog, setAreaDialog] = useState<{ area: Area | null } | null>(null);
   const [lookupState, setLookupState] = useState<LookupState | null>(null);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   const chatAbortRef = useRef<AbortController | null>(null);
   const lookupAbortRef = useRef<AbortController | null>(null);
@@ -86,8 +88,15 @@ export default function App() {
         const finalText = full || streamed;
         store.patchMessage(chat.id, placeholder.id, { content: finalText });
         // Nach einer gesprochenen Nachricht ist ein gesprochener Rückkanal
-        // naheliegend – die Antwort wird automatisch vorgelesen.
-        if (payload.audio && finalText && canSpeak()) speak(finalText, targetLang.speechLang);
+        // naheliegend – die Antwort wird automatisch vorgelesen (nur der
+        // Gesprächsteil, nicht die Korrektur).
+        const spokenReply = replyTextOf(finalText);
+        if (payload.audio && spokenReply && canSpeak()) {
+          setSpeakingMessageId(placeholder.id);
+          speak(spokenReply, targetLang.speechLang, {
+            onEnd: () => setSpeakingMessageId((id) => (id === placeholder.id ? null : id)),
+          });
+        }
       } catch (error) {
         if (isAbortError(error)) {
           store.patchMessage(chat.id, placeholder.id, { content: streamed, error: 'Abgebrochen.' });
@@ -104,7 +113,28 @@ export default function App() {
 
   const stop = useCallback(() => {
     chatAbortRef.current?.abort();
+    stopSpeaking();
+    setSpeakingMessageId(null);
   }, []);
+
+  // Sprachausgabe muss sich jederzeit unterbrechen lassen: Klick auf denselben
+  // "vorlesen"-Knopf stoppt statt neu zu starten.
+  const toggleSpeak = useCallback(
+    (message: Message) => {
+      if (speakingMessageId === message.id) {
+        stopSpeaking();
+        setSpeakingMessageId(null);
+        return;
+      }
+      const text = replyTextOf(message.content);
+      if (!text) return;
+      setSpeakingMessageId(message.id);
+      speak(text, targetLang.speechLang, {
+        onEnd: () => setSpeakingMessageId((id) => (id === message.id ? null : id)),
+      });
+    },
+    [speakingMessageId, targetLang.speechLang],
+  );
 
   // --- Nachschlagen -----------------------------------------------------
 
@@ -143,8 +173,9 @@ export default function App() {
 
   const handleSelect = useCallback(
     (messageId: string, selection: string, anchor: DOMRect) => {
-      const context = activeChat?.messages.find((m) => m.id === messageId)?.content ?? '';
-      void runLookup(messageId, selection, anchor, context);
+      const content = activeChat?.messages.find((m) => m.id === messageId)?.content ?? '';
+      // Nachschlagen betrifft immer nur den Gesprächsteil, nie die Korrekturzeilen.
+      void runLookup(messageId, selection, anchor, replyTextOf(content), 'auto');
     },
     [activeChat, runLookup],
   );
@@ -153,8 +184,10 @@ export default function App() {
     (message: Message) => {
       const element = document.querySelector(`[data-message="${message.id}"]`);
       const anchor = element?.getBoundingClientRect() ?? new DOMRect(window.innerWidth / 2, 120, 0, 0);
-      // Eine ganze Nachricht will man übersetzt haben, nicht Wort für Wort.
-      void runLookup(message.id, message.content, anchor, message.content, 'ai');
+      // Eine ganze Nachricht will man übersetzt haben, nicht Wort für Wort –
+      // und auch hier nur den Gesprächsteil, nicht die Korrektur.
+      const text = replyTextOf(message.content);
+      void runLookup(message.id, text, anchor, text, 'ai');
     },
     [runLookup],
   );
@@ -162,6 +195,13 @@ export default function App() {
   const closeLookup = useCallback(() => {
     lookupAbortRef.current?.abort();
     setLookupState(null);
+  }, []);
+
+  // Beim Wechsel von Bereich/Chat darf eine noch laufende Sprachausgabe
+  // nicht in den neuen Kontext hinüberlaufen.
+  const stopSpeech = useCallback(() => {
+    stopSpeaking();
+    setSpeakingMessageId(null);
   }, []);
 
   // --- Bereiche ---------------------------------------------------------
@@ -196,6 +236,7 @@ export default function App() {
         onSelectArea={(id) => {
           store.selectArea(id);
           closeLookup();
+          stopSpeech();
         }}
         onNewArea={() => setAreaDialog({ area: null })}
         onEditArea={(area) => setAreaDialog({ area })}
@@ -203,11 +244,13 @@ export default function App() {
           store.selectChat(id);
           setSidebarOpen(false);
           closeLookup();
+          stopSpeech();
         }}
         onNewChat={() => {
           if (activeArea) store.createChat(activeArea.id);
           setSidebarOpen(false);
           closeLookup();
+          stopSpeech();
         }}
         onDeleteChat={store.deleteChat}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -243,8 +286,10 @@ export default function App() {
             targetLang={targetLang}
             activeLookupMessageId={lookupState?.messageId ?? null}
             streamingMessageId={streamingMessageId}
+            speakingMessageId={speakingMessageId}
             onSelect={handleSelect}
             onTranslateMessage={handleTranslateMessage}
+            onToggleSpeak={toggleSpeak}
           />
         ) : (
           <div className="empty">
