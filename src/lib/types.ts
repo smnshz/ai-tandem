@@ -31,12 +31,20 @@ export interface Area {
   createdAt: number;
 }
 
-export interface Settings {
+export type ProviderId = 'gemini' | 'anthropic';
+
+export interface ProviderConfig {
   apiKey: string;
   /** Modell für die Konversation. */
   chatModel: string;
-  /** Modell für Zeichen-Lookups (kann günstiger/schneller sein). */
+  /** Modell für Nachschlagen, das das Wörterbuch nicht abdeckt. */
   lookupModel: string;
+}
+
+export interface Settings {
+  provider: ProviderId;
+  gemini: ProviderConfig;
+  anthropic: ProviderConfig;
 }
 
 /** Ein Wort/Zeichen innerhalb der markierten Auswahl. */
@@ -44,14 +52,20 @@ export interface LookupSegment {
   text: string;
   reading: string;
   meaning: string;
+  /** true, wenn das Wörterbuch dazu nichts hatte. */
+  unknown?: boolean;
 }
 
 export interface LookupResult {
   /** Die nachgeschlagene Auswahl. */
   query: string;
   segments: LookupSegment[];
-  /** Übersetzung der gesamten Auswahl in die eigene Sprache. */
-  translation: string;
+  /** Übersetzung der gesamten Auswahl – nur die KI liefert die. */
+  translation?: string;
   /** Optionaler kurzer Hinweis (Grammatik, Ton, Register). */
   note?: string;
+  /** Woher das Ergebnis kommt. */
+  source: 'dict' | 'ai';
+  /** true, wenn im Wörterbuch etwas gefehlt hat. */
+  incomplete?: boolean;
 }

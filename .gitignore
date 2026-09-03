@@ -4,3 +4,7 @@ dist/
 *.local
 .env
 .env.*
+
+# Generiert von scripts/build-dict.mjs
+public/dict/
+tsconfig.tsbuildinfo

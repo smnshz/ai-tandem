@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import type { Settings } from '../lib/types';
-import { CHAT_MODELS } from '../lib/anthropic';
+import type { ProviderConfig, ProviderId, Settings } from '../lib/types';
+import type { ModelOption } from '../lib/providers/types';
+import { PROVIDERS, PROVIDER_IDS, listModels } from '../lib/ai';
 import { isPersistent } from '../lib/storage';
 import { clearCache } from '../lib/lookupCache';
+import { dictionaryMeta, isLoaded } from '../lib/dictionary';
 
 interface Props {
   settings: Settings;
@@ -11,11 +13,41 @@ interface Props {
 }
 
 export function SettingsDialog({ settings, onSave, onClose }: Props) {
-  const [apiKey, setApiKey] = useState(settings.apiKey);
-  const [chatModel, setChatModel] = useState(settings.chatModel);
-  const [lookupModel, setLookupModel] = useState(settings.lookupModel);
+  const [provider, setProvider] = useState<ProviderId>(settings.provider);
+  const [configs, setConfigs] = useState<Record<ProviderId, ProviderConfig>>({
+    gemini: { ...settings.gemini },
+    anthropic: { ...settings.anthropic },
+  });
   const [reveal, setReveal] = useState(false);
   const [cacheCleared, setCacheCleared] = useState(false);
+  const [remoteModels, setRemoteModels] = useState<Partial<Record<ProviderId, ModelOption[]>>>({});
+  const [modelStatus, setModelStatus] = useState<string | null>(null);
+
+  const definition = PROVIDERS[provider];
+  const config = configs[provider];
+  const models = remoteModels[provider] ?? definition.models;
+  const meta = dictionaryMeta();
+
+  const patch = (change: Partial<ProviderConfig>) => {
+    setConfigs((prev) => ({ ...prev, [provider]: { ...prev[provider], ...change } }));
+  };
+
+  const loadModels = async () => {
+    setModelStatus('Lade Modelle …');
+    try {
+      const list = await listModels({ ...settings, provider, [provider]: config } as Settings);
+      setRemoteModels((prev) => ({ ...prev, [provider]: list }));
+      setModelStatus(`${list.length} Modelle geladen.`);
+    } catch (error) {
+      setModelStatus(definition.describeError(error));
+    }
+  };
+
+  /** Ein Modell, das nicht in der Liste steht, bleibt trotzdem wählbar. */
+  const options: ModelOption[] = [config.chatModel, config.lookupModel].reduce(
+    (list, id) => (id && !list.some((model) => model.id === id) ? [...list, { id, label: id }] : list),
+    models,
+  );
 
   return (
     <div className="modal-backdrop" onPointerDown={onClose}>
@@ -23,15 +55,26 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
         <h2>Einstellungen</h2>
 
         <label>
-          Anthropic API-Key
+          Anbieter
+          <select value={provider} onChange={(event) => setProvider(event.target.value as ProviderId)}>
+            {PROVIDER_IDS.map((id) => (
+              <option key={id} value={id}>
+                {PROVIDERS[id].label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          API-Key ({definition.label})
           <div className="input-row">
             <input
               type={reveal ? 'text' : 'password'}
-              value={apiKey}
+              value={config.apiKey}
               autoComplete="off"
               spellCheck={false}
-              placeholder="sk-ant-…"
-              onChange={(event) => setApiKey(event.target.value.trim())}
+              placeholder={provider === 'gemini' ? 'AIza…' : 'sk-ant-…'}
+              onChange={(event) => patch({ apiKey: event.target.value.trim() })}
             />
             <button className="btn btn-secondary" onClick={() => setReveal((value) => !value)}>
               {reveal ? 'verbergen' : 'zeigen'}
@@ -39,20 +82,19 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
           </div>
         </label>
         <p className="muted tiny">
-          Den Key gibt es unter{' '}
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
-            console.anthropic.com/settings/keys
+          {definition.keyHint} Key holen:{' '}
+          <a href={definition.keyUrl} target="_blank" rel="noreferrer">
+            {definition.keyUrl.replace('https://', '')}
           </a>
-          . Er wird nur in diesem Browser gespeichert (localStorage) und direkt an die Claude API geschickt – er
-          landet nie im Repository. Wer die Seite auf demselben Gerät öffnet, kann ihn auslesen: also nur auf
-          eigenen Geräten benutzen.
+          . Er wird nur in diesem Browser gespeichert und direkt an den Anbieter geschickt – er landet nie im
+          Repository. Wer Zugriff auf dieses Gerät hat, kann ihn auslesen.
         </p>
 
         <div className="row">
           <label>
             Modell fürs Gespräch
-            <select value={chatModel} onChange={(event) => setChatModel(event.target.value)}>
-              {CHAT_MODELS.map((model) => (
+            <select value={config.chatModel} onChange={(event) => patch({ chatModel: event.target.value })}>
+              {options.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.label}
                 </option>
@@ -61,8 +103,8 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
           </label>
           <label>
             Modell fürs Nachschlagen
-            <select value={lookupModel} onChange={(event) => setLookupModel(event.target.value)}>
-              {CHAT_MODELS.map((model) => (
+            <select value={config.lookupModel} onChange={(event) => patch({ lookupModel: event.target.value })}>
+              {options.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.label}
                 </option>
@@ -70,9 +112,36 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
             </select>
           </label>
         </div>
+        <p className="muted tiny">
+          <button className="link-btn" onClick={() => void loadModels()} disabled={!config.apiKey}>
+            Modelle laden
+          </button>{' '}
+          holt die Liste, die dein Key tatsächlich freischaltet. {modelStatus}
+        </p>
 
         <p className="muted tiny">
-          Speicher: {isPersistent() ? 'localStorage – Daten bleiben in diesem Browser.' : 'nur im Arbeitsspeicher (privater Modus) – beim Schließen des Tabs weg.'}
+          Wörterbuch:{' '}
+          {meta ? (
+            <a href={meta.source} target="_blank" rel="noreferrer">
+              {meta.name}
+            </a>
+          ) : (
+            'HanDeDict'
+          )}
+          {meta
+            ? `, ${meta.entries.toLocaleString('de-DE')} Einträge (Stand ${meta.dataStamp.slice(0, 10)}, ${meta.license})`
+            : isLoaded()
+              ? ' (geladen)'
+              : ' (wird beim ersten Nachschlagen geladen)'}
+          . Chinesisch → Deutsch läuft damit ohne API; die KI kommt nur für Kontext, ganze Sätze und fehlende
+          Wörter dazu.
+        </p>
+
+        <p className="muted tiny">
+          Speicher:{' '}
+          {isPersistent()
+            ? 'localStorage – Daten bleiben in diesem Browser.'
+            : 'nur im Arbeitsspeicher (privater Modus) – beim Schließen des Tabs weg.'}
         </p>
 
         <div className="modal-foot">
@@ -83,7 +152,7 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
               setCacheCleared(true);
             }}
           >
-            {cacheCleared ? 'Cache geleert' : 'Übersetzungs-Cache leeren'}
+            {cacheCleared ? 'Cache geleert' : 'KI-Cache leeren'}
           </button>
           <span className="spacer" />
           <button className="btn btn-secondary" onClick={onClose}>
@@ -92,7 +161,7 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
           <button
             className="btn"
             onClick={() => {
-              onSave({ apiKey, chatModel, lookupModel });
+              onSave({ provider, gemini: configs.gemini, anthropic: configs.anthropic });
               onClose();
             }}
           >

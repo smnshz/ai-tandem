@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dict": "node scripts/build-dict.mjs",
+    "build": "node scripts/build-dict.mjs --if-missing && tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

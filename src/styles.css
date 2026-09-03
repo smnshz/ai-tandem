@@ -317,6 +317,29 @@ a { color: var(--accent); }
 .seg-reading { color: var(--accent); font-size: 14px; }
 .seg-meaning { font-size: 14px; }
 
+.seg-unknown .seg-text { opacity: 0.6; }
+.seg-unknown .seg-meaning { color: var(--muted); font-style: italic; }
+
+.lookup-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
 .translation { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; }
 .note { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 

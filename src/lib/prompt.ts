@@ -35,3 +35,18 @@ export function deriveChatTitle(firstMessage: string): string {
   if (!clean) return 'Neues Gespräch';
   return clean.length > 32 ? clean.slice(0, 32) + '…' : clean;
 }
+
+/** System-Prompt fürs Nachschlagen einer Auswahl. */
+export function buildLookupPrompt(area: Area): string {
+  const target = getLanguage(area.targetLang);
+  const native = getLanguage(area.nativeLang);
+
+  return [
+    `Du bist ein Wörterbuch für Lernende von ${target.label}. Die Erklärungssprache ist ${native.label}.`,
+    `"reading" ist immer die ${target.readingName}-Umschrift (bei Chinesisch: Pinyin mit Tonzeichen, z.B. "nǐ hǎo").`,
+    `"meaning" und "translation" sind immer auf ${native.label}.`,
+    'Zerlege die Auswahl in die Wörter, wie sie in der Sprache tatsächlich vorkommen (bei Chinesisch also z.B. 朋友 als ein Wort, nicht als zwei Zeichen).',
+    'Ist die Auswahl ein einzelnes Zeichen, gib genau ein Segment zurück.',
+    'Nutze den Kontext, um die im Satz passende Bedeutung zu wählen. Halte dich kurz.',
+  ].join('\n');
+}

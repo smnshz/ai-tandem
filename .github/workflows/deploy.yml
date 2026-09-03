@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Baut das Offline-Wörterbuch (HanDeDict) mit ins Bundle.
+      - run: npm run dict
       - run: npm run build
         env:
           # Bei GitHub Pages liegt die App unter /<repo>/.
