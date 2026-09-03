@@ -1,14 +1,55 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Area, Chat, Message, Role, Settings } from './types';
+import type { Area, Chat, Message, ProviderId, Role, Settings } from './types';
 import { KEYS, load, save } from './storage';
 import { newId } from './id';
-import { DEFAULT_CHAT_MODEL, DEFAULT_LOOKUP_MODEL } from './anthropic';
+import { PROVIDERS } from './ai';
 
-const DEFAULT_SETTINGS: Settings = {
-  apiKey: '',
-  chatModel: DEFAULT_CHAT_MODEL,
-  lookupModel: DEFAULT_LOOKUP_MODEL,
-};
+function defaultSettings(): Settings {
+  return {
+    provider: 'gemini',
+    gemini: {
+      apiKey: '',
+      chatModel: PROVIDERS.gemini.defaultChatModel,
+      lookupModel: PROVIDERS.gemini.defaultLookupModel,
+    },
+    anthropic: {
+      apiKey: '',
+      chatModel: PROVIDERS.anthropic.defaultChatModel,
+      lookupModel: PROVIDERS.anthropic.defaultLookupModel,
+    },
+  };
+}
+
+/**
+ * Frühere Versionen kannten nur einen Anbieter und speicherten
+ * { apiKey, chatModel, lookupModel } flach. Das ordnen wir Claude zu,
+ * damit ein bestehender Key nicht verloren geht.
+ */
+interface LegacySettings {
+  apiKey?: string;
+  chatModel?: string;
+  lookupModel?: string;
+}
+
+function migrateSettings(stored: Partial<Settings> & LegacySettings): Settings {
+  const base = defaultSettings();
+  if (typeof stored.apiKey === 'string' && !stored.anthropic) {
+    return {
+      ...base,
+      provider: stored.apiKey ? 'anthropic' : 'gemini',
+      anthropic: {
+        apiKey: stored.apiKey,
+        chatModel: stored.chatModel ?? base.anthropic.chatModel,
+        lookupModel: stored.lookupModel ?? base.anthropic.lookupModel,
+      },
+    };
+  }
+  return {
+    provider: stored.provider ?? base.provider,
+    gemini: { ...base.gemini, ...stored.gemini },
+    anthropic: { ...base.anthropic, ...stored.anthropic },
+  };
+}
 
 function defaultArea(): Area {
   return {
@@ -46,6 +87,7 @@ export interface Store {
   patchMessage: (chatId: string, messageId: string, patch: Partial<Message>) => void;
 
   saveSettings: (patch: Partial<Settings>) => void;
+  setProvider: (provider: ProviderId) => void;
 }
 
 export function useStore(): Store {
@@ -54,10 +96,9 @@ export function useStore(): Store {
     return stored.length ? stored : [defaultArea()];
   });
   const [chats, setChats] = useState<Chat[]>(() => load<Chat[]>(KEYS.chats, []));
-  const [settings, setSettings] = useState<Settings>(() => ({
-    ...DEFAULT_SETTINGS,
-    ...load<Partial<Settings>>(KEYS.settings, {}),
-  }));
+  const [settings, setSettings] = useState<Settings>(() =>
+    migrateSettings(load<Partial<Settings>>(KEYS.settings, {})),
+  );
   const [activeAreaId, setActiveAreaId] = useState<string | null>(() => load<string | null>(KEYS.activeArea, null));
   const [activeChatId, setActiveChatId] = useState<string | null>(() => load<string | null>(KEYS.activeChat, null));
 
@@ -156,6 +197,10 @@ export function useStore(): Store {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const setProvider = useCallback((provider: ProviderId) => {
+    setSettings((prev) => ({ ...prev, provider }));
+  }, []);
+
   return {
     areas,
     chats,
@@ -174,5 +219,6 @@ export function useStore(): Store {
     addMessage,
     patchMessage,
     saveSettings,
+    setProvider,
   };
 }

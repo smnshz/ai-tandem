@@ -1,9 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from './lib/state';
 import { getLanguage } from './lib/languages';
 import { deriveChatTitle } from './lib/prompt';
-import { describeError, isAbortError, lookup, streamChat } from './lib/anthropic';
-import { getCached, putCached } from './lib/lookupCache';
+import { describeError, hasApiKey, isAbortError, resolveLookup, streamChat } from './lib/ai';
+import { ensureDictionary, supportsOffline } from './lib/dictionary';
 import type { Area, Message } from './lib/types';
 import { Sidebar } from './components/Sidebar';
 import { MessageList } from './components/MessageList';
@@ -25,7 +25,12 @@ export default function App() {
 
   const { activeArea, activeChat, settings } = store;
   const targetLang = getLanguage(activeArea?.targetLang ?? 'zh-TW');
-  const hasApiKey = settings.apiKey.trim().length > 0;
+  const keyPresent = hasApiKey(settings);
+
+  // Das Wörterbuch im Hintergrund holen, damit das erste Antippen sofort sitzt.
+  useEffect(() => {
+    if (activeArea && supportsOffline(activeArea)) void ensureDictionary();
+  }, [activeArea]);
 
   // --- Gespräch ---------------------------------------------------------
 
@@ -65,7 +70,7 @@ export default function App() {
         if (isAbortError(error)) {
           store.patchMessage(chat.id, placeholder.id, { content: streamed, error: 'Abgebrochen.' });
         } else {
-          store.patchMessage(chat.id, placeholder.id, { content: streamed, error: describeError(error) });
+          store.patchMessage(chat.id, placeholder.id, { content: streamed, error: describeError(settings, error) });
         }
       } finally {
         chatAbortRef.current = null;
@@ -82,24 +87,14 @@ export default function App() {
   // --- Nachschlagen -----------------------------------------------------
 
   const runLookup = useCallback(
-    async (messageId: string, selection: string, anchor: DOMRect, context: string, force = false) => {
+    async (
+      messageId: string,
+      selection: string,
+      anchor: DOMRect,
+      context: string,
+      mode: 'auto' | 'ai' = 'auto',
+    ) => {
       if (!activeArea) return;
-      if (!hasApiKey) {
-        setLookupState({
-          messageId,
-          selection,
-          anchor,
-          status: 'error',
-          error: 'Kein API-Key hinterlegt – bitte in den Einstellungen eintragen.',
-        });
-        return;
-      }
-
-      const cachedResult = force ? undefined : getCached(activeArea.targetLang, selection);
-      if (cachedResult) {
-        setLookupState({ messageId, selection, anchor, status: 'done', result: cachedResult, fromCache: true });
-        return;
-      }
 
       lookupAbortRef.current?.abort();
       const controller = new AbortController();
@@ -107,21 +102,21 @@ export default function App() {
 
       setLookupState({ messageId, selection, anchor, status: 'loading' });
       try {
-        const result = await lookup({
+        const result = await resolveLookup({
           settings,
           area: activeArea,
           selection,
           context,
+          mode,
           signal: controller.signal,
         });
-        putCached(activeArea.targetLang, selection, result);
         setLookupState({ messageId, selection, anchor, status: 'done', result });
       } catch (error) {
         if (isAbortError(error)) return;
-        setLookupState({ messageId, selection, anchor, status: 'error', error: describeError(error) });
+        setLookupState({ messageId, selection, anchor, status: 'error', error: describeError(settings, error) });
       }
     },
-    [activeArea, hasApiKey, settings],
+    [activeArea, settings],
   );
 
   const handleSelect = useCallback(
@@ -136,7 +131,8 @@ export default function App() {
     (message: Message) => {
       const element = document.querySelector(`[data-message="${message.id}"]`);
       const anchor = element?.getBoundingClientRect() ?? new DOMRect(window.innerWidth / 2, 120, 0, 0);
-      void runLookup(message.id, message.content, anchor, message.content);
+      // Eine ganze Nachricht will man übersetzt haben, nicht Wort für Wort.
+      void runLookup(message.id, message.content, anchor, message.content, 'ai');
     },
     [runLookup],
   );
@@ -193,7 +189,7 @@ export default function App() {
         }}
         onDeleteChat={store.deleteChat}
         onOpenSettings={() => setSettingsOpen(true)}
-        hasApiKey={hasApiKey}
+        hasApiKey={keyPresent}
       />
 
       <main className="main">
@@ -210,7 +206,7 @@ export default function App() {
           </button>
         </header>
 
-        {!hasApiKey && (
+        {!keyPresent && (
           <div className="banner">
             Kein API-Key hinterlegt.{' '}
             <button className="link-btn" onClick={() => setSettingsOpen(true)}>
@@ -255,13 +251,13 @@ export default function App() {
           state={lookupState}
           targetLang={targetLang}
           onClose={closeLookup}
-          onReload={() =>
+          onAskAi={() =>
             void runLookup(
               lookupState.messageId,
               lookupState.selection,
               lookupState.anchor,
               activeChat?.messages.find((m) => m.id === lookupState.messageId)?.content ?? '',
-              true,
+              'ai',
             )
           }
         />

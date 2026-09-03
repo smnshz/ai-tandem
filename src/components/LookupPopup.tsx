@@ -17,12 +17,13 @@ interface Props {
   state: LookupState;
   targetLang: LanguageDef;
   onClose: () => void;
-  onReload: () => void;
+  /** Auswahl (noch einmal) von der KI erklären lassen. */
+  onAskAi: () => void;
 }
 
 const MOBILE_BREAKPOINT = 640;
 
-export function LookupPopup({ state, targetLang, onClose, onReload }: Props) {
+export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({ visibility: 'hidden' });
   const [isSheet, setIsSheet] = useState(() => window.innerWidth < MOBILE_BREAKPOINT);
@@ -84,9 +85,7 @@ export function LookupPopup({ state, targetLang, onClose, onReload }: Props) {
                 🔊
               </button>
             )}
-            <button className="icon-btn" title="Neu nachschlagen" onClick={onReload}>
-              ↻
-            </button>
+
             <button className="icon-btn" title="Schließen" onClick={onClose}>
               ✕
             </button>
@@ -101,7 +100,7 @@ export function LookupPopup({ state, targetLang, onClose, onReload }: Props) {
           <div className="lookup-body">
             <ul className="segments">
               {state.result.segments.map((segment, index) => (
-                <li key={index}>
+                <li key={index} className={segment.unknown ? 'seg-unknown' : undefined}>
                   <span className="seg-text" lang={targetLang.code}>
                     {segment.text}
                   </span>
@@ -110,15 +109,29 @@ export function LookupPopup({ state, targetLang, onClose, onReload }: Props) {
                 </li>
               ))}
             </ul>
-            {state.result.segments.length > 1 && (
+
+            {state.result.translation && (
               <p className="translation">
                 <strong>Ganze Auswahl:</strong> {state.result.translation}
               </p>
             )}
             {state.result.note && <p className="note">{state.result.note}</p>}
-            {state.fromCache && <p className="muted tiny">aus dem lokalen Cache</p>}
+
+            <div className="lookup-foot">
+              <span className="badge">
+                {state.result.source === 'dict' ? 'Wörterbuch · offline' : 'KI'}
+              </span>
+              <button className="link-btn" onClick={onAskAi}>
+                {state.result.incomplete
+                  ? 'fehlende Wörter per KI klären'
+                  : state.result.source === 'dict'
+                    ? 'im Satzkontext per KI erklären'
+                    : 'noch einmal nachschlagen'}
+              </button>
+            </div>
           </div>
         )}
+
       </div>
     </>
   );

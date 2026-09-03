@@ -1,9 +1,9 @@
 # AI Sprachtandem
 
 Eine kleine Web-App zum Sprachenlernen im Gespräch: Du hinterlegst einen
-Initial-Prompt (Rolle, Situation, Niveau), führst darin Gespräche mit Claude –
+Initial-Prompt (Rolle, Situation, Niveau), führst darin Gespräche mit einer KI –
 und **tippst im Chat auf einzelne Zeichen**, um Aussprache und Bedeutung
-eingeblendet zu bekommen. Mehrere Zeichen markieren übersetzt den ganzen
+eingeblendet zu bekommen. Mehrere Zeichen markieren erklärt den ganzen
 Ausschnitt.
 
 Voreingestellt ist traditionelles Chinesisch mit deutschen Erklärungen; die
@@ -12,35 +12,67 @@ Sprachen lassen sich pro Bereich umstellen.
 Reines Frontend, kein Backend, keine Datenbank. Alles liegt im `localStorage`
 des Browsers.
 
+## Nachschlagen läuft offline
+
+Für Chinesisch → Deutsch bringt die App das Wörterbuch **HanDeDict** mit
+(~122.000 Einträge). Antippen kostet damit weder API-Aufrufe noch Wartezeit:
+die Auswahl wird lokal in Wörter zerlegt und mit Pinyin und Bedeutung
+angezeigt.
+
+Die KI wird nur gefragt, wenn du sie brauchst:
+
+- **„im Satzkontext per KI erklären"** – wenn ein Wort mehrdeutig ist,
+- **„fehlende Wörter per KI klären"** – wenn das Wörterbuch etwas nicht kennt,
+- **„übersetzen"** unter einer Nachricht – für eine flüssige Übersetzung,
+- und natürlich für das Gespräch selbst.
+
+KI-Ergebnisse werden lokal zwischengespeichert. Für andere Sprachpaare als
+Chinesisch → Deutsch gibt es kein Wörterbuch; dort läuft jedes Nachschlagen
+über die KI.
+
 ## Bedienung
 
 - **Bereich**: bündelt Sprache + Initial-Prompt, z.B. „Chinesisch". Der Prompt
-  legt fest, in welche Rolle Claude schlüpft.
+  legt fest, in welche Rolle die KI schlüpft.
 - **Gespräch**: ein Chat innerhalb eines Bereichs. Beliebig viele pro Bereich.
 - **Antippen**: ein Zeichen antippen → Pinyin + Bedeutung. Über mehrere Zeichen
-  ziehen → Umschrift, Wortzerlegung und Übersetzung des Ausschnitts.
-- **übersetzen** unter einer Nachricht übersetzt die ganze Nachricht.
+  ziehen → Wortzerlegung des Ausschnitts.
 - **🔊** liest Text über die Sprachausgabe des Browsers vor (Qualität und
   verfügbare Stimmen hängen vom Betriebssystem ab).
-- Nachgeschlagene Ausdrücke landen in einem lokalen Cache; **↻** im Popup
-  erzwingt einen frischen Lookup.
 
 ## API-Key
 
-Die App spricht die Claude API **direkt aus dem Browser** an. Der Key steht
-deshalb nicht im Repository, sondern wird zur Laufzeit eingetragen:
+Die App spricht die KI **direkt aus dem Browser** an. Der Key steht deshalb
+nicht im Repository, sondern wird zur Laufzeit eingetragen: **⚙ Einstellungen**
+→ Anbieter wählen → Key einfügen → speichern.
 
-1. Key erstellen: <https://console.anthropic.com/settings/keys> (beginnt mit `sk-ant-`).
-2. In der App **⚙ Einstellungen** öffnen, Key einfügen, speichern.
-3. Der Key liegt danach im `localStorage` dieses Browsers (Schlüssel
-   `ai-tandem.v1.settings`) und wird bei jedem Request als `x-api-key`
-   mitgeschickt.
+| Anbieter | Key holen | Kosten |
+| --- | --- | --- |
+| Google Gemini (Standard) | <https://aistudio.google.com/apikey> | Flash-Modelle haben ein kostenloses Kontingent mit Tages-/Minutenlimits |
+| Anthropic Claude | <https://console.anthropic.com/settings/keys> | nur mit API-Guthaben, siehe unten |
 
-**Was das bedeutet:** Wer Zugriff auf denselben Browser hat (oder JavaScript in
-die Seite einschleusen kann), kann den Key lesen. Für den persönlichen Gebrauch
-auf eigenen Geräten ist das okay – wenn die App öffentlich für andere Nutzer
-laufen soll, gehört ein Proxy davor (siehe unten). Im privaten/Inkognito-Modus
-ist der Key – wie alle anderen Daten auch – nach dem Schließen des Tabs weg.
+Über **„Modelle laden"** in den Einstellungen holt die App die Liste der
+Modelle, die dein Key tatsächlich freischaltet – praktisch, wenn ein
+voreingestellter Modellname bei dir nicht verfügbar ist.
+
+### Warum das Claude-Abo hier nicht gilt
+
+Ein Claude-Abo (Pro/Max) gilt für claude.ai und Claude Code, nicht für eigene
+Anwendungen. Die API rechnet getrennt über API-Guthaben ab; es gibt keinen
+unterstützten Weg, das Abo-Kontingent aus einer eigenen App heraus zu nutzen.
+Deshalb ist Gemini voreingestellt: dessen Flash-Modelle haben ein kostenloses
+Kontingent, und durch das Offline-Wörterbuch bleiben ohnehin nur die
+Gesprächsantworten als API-Aufrufe übrig.
+
+### Wo der Key landet
+
+Der Key liegt im `localStorage` dieses Browsers (Schlüssel
+`ai-tandem.v1.settings`) und wird bei jedem Request direkt an den Anbieter
+geschickt. Wer Zugriff auf denselben Browser hat (oder JavaScript in die Seite
+einschleusen kann), kann ihn auslesen. Für den persönlichen Gebrauch auf
+eigenen Geräten ist das okay – soll die App öffentlich für andere Nutzer
+laufen, gehört ein Proxy davor (siehe unten). Im privaten/Inkognito-Modus ist
+der Key – wie alle anderen Daten auch – nach dem Schließen des Tabs weg.
 
 Trag den Key **nicht** als `VITE_...`-Variable in den Build ein: alles, was Vite
 zur Buildzeit einsetzt, steht anschließend im öffentlich abrufbaren JS-Bundle.
@@ -49,10 +81,15 @@ zur Buildzeit einsetzt, steht anschließend im öffentlich abrufbaren JS-Bundle.
 
 ```bash
 npm install
+npm run dict     # lädt HanDeDict und baut public/dict/ (einmalig, ~60 MB Download)
 npm run dev      # http://localhost:5173/ai-tandem/
 npm run build    # Produktions-Build nach dist/
 npm run preview  # Build lokal ansehen
 ```
+
+`npm run build` baut das Wörterbuch bei Bedarf selbst (`--if-missing`). Schlägt
+der Download fehl, läuft der Build trotzdem durch – die App fragt dann für
+jedes Nachschlagen die KI.
 
 ## Deployment auf GitHub Pages
 
@@ -68,33 +105,33 @@ Die App liegt danach unter `https://<user>.github.io/ai-tandem/`.
 Für anderes Hosting (Netlify, Vercel, eigene Domain im Root) mit
 `BASE_PATH=/ npm run build` bauen.
 
-## Modelle und Kosten
-
-In den Einstellungen lassen sich Modelle getrennt wählen für das Gespräch und
-für das Nachschlagen. Voreinstellung ist jeweils Claude Opus 5. Wer die App viel
-benutzt, kann fürs Nachschlagen auf Sonnet 5 oder Haiku 4.5 gehen – das sind
-kurze, gut abgesteckte Anfragen. Beide Aufrufe laufen mit `effort: "low"`, weil
-Plauderei und Wörterbuch-Lookups keine tiefe Analyse brauchen; Antworten sind
-dadurch schneller und günstiger. Nachgeschlagene Ausdrücke werden lokal
-gecacht, kosten also nur beim ersten Mal.
-
 ## Aufbau
 
 ```
+scripts/
+  build-dict.mjs    baut public/dict/ aus HanDeDict (Download + Kürzung)
 src/
   lib/
-    anthropic.ts    Claude-Aufrufe: Streaming-Chat + strukturierter Lookup
-    prompt.ts       System-Prompt aus Bereich + Tandem-Regeln
+    ai.ts           Fassade: Wörterbuch → Cache → KI, anbieterunabhängig
+    providers/
+      gemini.ts     Gemini über REST (SSE-Streaming, responseSchema)
+      anthropic.ts  Claude über das offizielle SDK
+      types.ts      gemeinsame Schnittstelle beider Anbieter
+    dictionary.ts   lädt das Offline-Wörterbuch, zerlegt Auswahl in Wörter
+    prompt.ts       System-Prompts aus Bereich + Tandem-Regeln
     state.ts        App-State inkl. Persistenz (React-Hook)
     storage.ts      localStorage-Wrapper, fällt im Privatmodus auf RAM zurück
     tokenize.ts     zerlegt Text in antippbare Zeichen/Wörter
-    lookupCache.ts  lokaler Cache für Nachschlage-Ergebnisse
+    lookupCache.ts  lokaler Cache für KI-Ergebnisse
     languages.ts    Sprachliste (Umschrift-Name, Tokenisierung, TTS-Locale)
   components/
     AnnotatedText   antippbarer Text (Tap = ein Zeichen, Ziehen = mehrere)
     LookupPopup     Karte bzw. Bottom-Sheet mit Umschrift/Bedeutung
     MessageList, Composer, Sidebar, AreaDialog, SettingsDialog
 ```
+
+Einen weiteren Anbieter einzubauen heißt: ein Modul in `src/lib/providers/`
+anlegen, das `Provider` implementiert, und es in `ai.ts` registrieren.
 
 ## Später: Datenbank statt localStorage
 
@@ -104,15 +141,24 @@ API-Aufrufe – der Rest der App weiß nicht, wo die Daten liegen.
 
 Für Mehrbenutzer-Betrieb kommt zusätzlich ein Proxy dazu: ein kleiner Endpunkt
 (z.B. Cloudflare Worker oder eine Serverless Function), der den API-Key
-serverseitig hält und die Requests an die Claude API weiterreicht. In
-`src/lib/anthropic.ts` ist dafür nur die Client-Erzeugung anzupassen
-(`baseURL` auf den eigenen Endpunkt, `apiKey` entfällt).
+serverseitig hält und die Requests weiterreicht. Im Provider-Modul ist dafür
+nur die Basis-URL anzupassen.
 
 ## Grenzen des POC
 
 - Kein Login, keine Synchronisation zwischen Geräten.
-- Der Lookup-Cache ist kontextfrei: gleiche Zeichenfolge = gleicher
-  Cache-Eintrag, auch wenn ein anderer Satz eine andere Lesart nahelegt. Bei
-  Bedarf **↻** drücken.
-- Die Wortzerlegung beim Nachschlagen kommt vom Modell, nicht aus einem
-  Wörterbuch – gut, aber nicht unfehlbar.
+- Der KI-Cache ist kontextfrei: gleiche Zeichenfolge = gleicher Cache-Eintrag.
+- Die Wortzerlegung nimmt den längsten passenden Wörterbucheintrag. Das ist bei
+  Chinesisch fast immer richtig, aber nicht immer – im Zweifel hilft „im
+  Satzkontext per KI erklären".
+- Das Wörterbuch enthält Einträge bis vier Zeichen Länge; längere Ausdrücke
+  werden aus kürzeren zusammengesetzt.
+
+## Datenquellen und Lizenzen
+
+Das Offline-Wörterbuch basiert auf [HanDeDict](https://github.com/gugray/HanDeDict)
+(Chinesisch-Deutsch, kollaborativ gepflegt), lizenziert unter
+[CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/deed.de). Die von
+`scripts/build-dict.mjs` erzeugte Datei ist eine gekürzte Fassung dieser Daten
+und steht damit unter derselben Lizenz. Quelle und Datenstand zeigt die App in
+den Einstellungen an.
