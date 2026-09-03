@@ -37,6 +37,8 @@ export interface Provider {
   defaultLookupModel: string;
   /** Vorschläge, wenn die Modell-Liste nicht geladen wurde. */
   models: ModelOption[];
+  /** Kann dieser Anbieter Audio direkt verstehen (ohne Transkription)? */
+  supportsAudioInput: boolean;
   streamChat(request: ChatRequest): Promise<string>;
   lookup(request: LookupRequest): Promise<LookupResult>;
   /** Fragt die tatsächlich verfügbaren Modelle beim Anbieter ab. */

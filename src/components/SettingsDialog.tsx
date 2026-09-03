@@ -64,6 +64,12 @@ export function SettingsDialog({ settings, onSave, onClose }: Props) {
             ))}
           </select>
         </label>
+        {!definition.supportsAudioInput && (
+          <p className="muted tiny">
+            🎤 Audio-Modus (Sprachnachricht direkt an die KI, ohne Transkription) gibt es aktuell nur mit Google
+            Gemini – {definition.label} unterstützt das (noch) nicht.
+          </p>
+        )}
 
         <label>
           API-Key ({definition.label})

@@ -39,6 +39,14 @@ Chinesisch → Deutsch gibt es kein Wörterbuch; dort läuft jedes Nachschlagen
   ziehen → Wortzerlegung des Ausschnitts.
 - **🔊** liest Text über die Sprachausgabe des Browsers vor (Qualität und
   verfügbare Stimmen hängen vom Betriebssystem ab).
+- **🎤 Audio-Modus**: Mikrofon-Symbol im Eingabefeld antippen, sprechen,
+  nochmal antippen zum Senden. Die Aufnahme geht als Audiodatei direkt an die
+  KI – **ohne** lokale Spracherkennung dazwischen. Gerade bei noch unsicherer
+  Aussprache ist das zuverlässiger als der Umweg über eine Transkription, die
+  eigene Fehler mitbringt. Die Antwort kommt als Text und wird automatisch
+  vorgelesen. Aktuell nur mit Google Gemini (Claude versteht über die API kein
+  Audio); Aufnahmen bleiben nur für die laufende Sitzung im Speicher, nicht im
+  `localStorage`.
 
 ## API-Key
 
@@ -153,6 +161,9 @@ nur die Basis-URL anzupassen.
   Satzkontext per KI erklären".
 - Das Wörterbuch enthält Einträge bis vier Zeichen Länge; längere Ausdrücke
   werden aus kürzeren zusammengesetzt.
+- Sprachnachrichten (Audio-Modus) werden nicht dauerhaft gespeichert – nach
+  einem Neuladen der Seite bleibt der Gesprächsverlauf erhalten, die
+  Audiodatei selbst ist weg.
 
 ## Datenquellen und Lizenzen
 

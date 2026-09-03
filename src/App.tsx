@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from './lib/state';
 import { getLanguage } from './lib/languages';
 import { deriveChatTitle } from './lib/prompt';
-import { describeError, hasApiKey, isAbortError, resolveLookup, streamChat } from './lib/ai';
+import { describeError, hasApiKey, isAbortError, providerOf, resolveLookup, streamChat } from './lib/ai';
 import { ensureDictionary, supportsOffline } from './lib/dictionary';
-import type { Area, Message } from './lib/types';
+import { canRecordAudio as browserCanRecordAudio, blobToBase64 } from './lib/audio';
+import { canSpeak, speak } from './lib/speech';
+import type { Area, Message, MessageAudio } from './lib/types';
 import { Sidebar } from './components/Sidebar';
 import { MessageList } from './components/MessageList';
-import { Composer } from './components/Composer';
+import { Composer, type SendPayload } from './components/Composer';
 import { LookupPopup, type LookupState } from './components/LookupPopup';
 import { AreaDialog } from './components/AreaDialog';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -26,6 +28,9 @@ export default function App() {
   const { activeArea, activeChat, settings } = store;
   const targetLang = getLanguage(activeArea?.targetLang ?? 'zh-TW');
   const keyPresent = hasApiKey(settings);
+  // Direkter Audio-Modus braucht Mikrofon-Unterstützung im Browser UND einen
+  // Anbieter, der Audio ohne Umweg über eine Transkription versteht.
+  const audioModeAvailable = browserCanRecordAudio() && providerOf(settings).supportsAudioInput;
 
   // Das Wörterbuch im Hintergrund holen, damit das erste Antippen sofort sitzt.
   useEffect(() => {
@@ -35,19 +40,32 @@ export default function App() {
   // --- Gespräch ---------------------------------------------------------
 
   const send = useCallback(
-    async (text: string) => {
+    async (payload: SendPayload) => {
       if (!activeArea) return;
+      const text = payload.text?.trim() ?? '';
+      if (!text && !payload.audio) return;
       const chat = activeChat ?? store.createChat(activeArea.id);
 
-      store.addMessage(chat.id, 'user', text);
-      if (chat.messages.length === 0) store.renameChat(chat.id, deriveChatTitle(text));
+      let audio: MessageAudio | undefined;
+      if (payload.audio) {
+        audio = {
+          mimeType: payload.audio.mimeType,
+          data: await blobToBase64(payload.audio.blob),
+          durationMs: payload.audio.durationMs,
+        };
+      }
+
+      store.addMessage(chat.id, 'user', text, audio);
+      if (chat.messages.length === 0) {
+        store.renameChat(chat.id, text ? deriveChatTitle(text) : '🎤 Sprachnachricht');
+      }
 
       const placeholder = store.addMessage(chat.id, 'assistant', '');
       setStreamingMessageId(placeholder.id);
 
       const history: Message[] = [
         ...chat.messages,
-        { id: 'tmp', role: 'user', content: text, createdAt: Date.now() },
+        { id: 'tmp', role: 'user', content: text, createdAt: Date.now(), audio },
       ];
 
       const controller = new AbortController();
@@ -65,7 +83,11 @@ export default function App() {
             store.patchMessage(chat.id, placeholder.id, { content: streamed });
           },
         });
-        store.patchMessage(chat.id, placeholder.id, { content: full || streamed });
+        const finalText = full || streamed;
+        store.patchMessage(chat.id, placeholder.id, { content: finalText });
+        // Nach einer gesprochenen Nachricht ist ein gesprochener Rückkanal
+        // naheliegend – die Antwort wird automatisch vorgelesen.
+        if (payload.audio && finalText && canSpeak()) speak(finalText, targetLang.speechLang);
       } catch (error) {
         if (isAbortError(error)) {
           store.patchMessage(chat.id, placeholder.id, { content: streamed, error: 'Abgebrochen.' });
@@ -77,7 +99,7 @@ export default function App() {
         setStreamingMessageId(null);
       }
     },
-    [activeArea, activeChat, settings, store],
+    [activeArea, activeChat, settings, store, targetLang.speechLang],
   );
 
   const stop = useCallback(() => {
@@ -241,7 +263,8 @@ export default function App() {
           disabled={!activeArea}
           busy={streamingMessageId !== null}
           placeholder={`Nachricht auf ${targetLang.label} …`}
-          onSend={(text) => void send(text)}
+          canRecordAudio={audioModeAvailable}
+          onSend={(payload) => void send(payload)}
           onStop={stop}
         />
       </main>

@@ -35,6 +35,13 @@ export function MessageList({
         return (
           <div key={message.id} data-message={message.id} className={`msg msg-${message.role}`}>
             <div className="bubble">
+              {message.audio && (
+                message.audio.data ? (
+                  <audio className="voice-msg" controls preload="none" src={`data:${message.audio.mimeType};base64,${message.audio.data}`} />
+                ) : (
+                  <span className="muted tiny">🎤 Sprachnachricht (nach Neuladen nicht mehr abspielbar)</span>
+                )
+              )}
               {message.content ? (
                 annotatable ? (
                   <AnnotatedText
@@ -47,7 +54,9 @@ export function MessageList({
                   <span className="plain">{message.content}</span>
                 )
               ) : (
-                streamingMessageId === message.id && <span className="typing" aria-label="schreibt" />
+                !message.audio && streamingMessageId === message.id && (
+                  <span className="typing" aria-label="schreibt" />
+                )
               )}
               {message.error && <p className="error tiny">{message.error}</p>}
             </div>

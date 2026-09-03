@@ -37,9 +37,15 @@ function textOf(content: Anthropic.ContentBlock[]): string {
 
 async function streamChat(request: ChatRequest): Promise<string> {
   const client = getClient(request.config.apiKey);
+  // Claude versteht (Stand jetzt) kein Audio über die Messages API – eine
+  // reine Sprachnachricht bekommt hier nur einen Platzhalter statt Inhalt,
+  // damit der Gesprächsverlauf nicht durcheinanderkommt.
   const history: Anthropic.MessageParam[] = request.messages
-    .filter((message) => message.content.trim().length > 0)
-    .map((message) => ({ role: message.role, content: message.content }));
+    .filter((message) => message.content.trim().length > 0 || message.audio)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.trim() || '(Sprachnachricht – von diesem Anbieter nicht unterstützt)',
+    }));
 
   const stream = client.messages.stream(
     {
@@ -144,6 +150,7 @@ export const anthropicProvider: Provider = {
   defaultChatModel: MODELS[0].id,
   defaultLookupModel: MODELS[2].id,
   models: MODELS,
+  supportsAudioInput: false,
   streamChat,
   lookup,
   listModels,
