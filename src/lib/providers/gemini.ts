@@ -76,6 +76,9 @@ async function streamChat(request: ChatRequest): Promise<string> {
         // Tandem-Antworten sind kurz – die Obergrenze ist bewusst niedrig.
         maxOutputTokens: 2000,
         temperature: 0.9,
+        // Ohne das hier frisst "Thinking" bei neueren Modellen das ganze
+        // Token-Budget auf, bevor sichtbarer Text kommt (leere Bubble).
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   });
@@ -86,22 +89,24 @@ async function streamChat(request: ChatRequest): Promise<string> {
   const decoder = new TextDecoder();
   let buffer = '';
   let full = '';
+  let finishReason: string | undefined;
 
-  // Server-Sent Events: Blöcke sind durch eine Leerzeile getrennt,
-  // die Nutzdaten stehen in Zeilen, die mit "data: " beginnen.
+  // Server-Sent Events: Blöcke sind durch eine Leerzeile getrennt
+  // (mal "\n\n", mal "\r\n\r\n"), die Nutzdaten stehen in Zeilen,
+  // die mit "data:" beginnen.
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    let separator = buffer.indexOf('\n\n');
+    let separator = buffer.search(/\r?\n\r?\n/);
     while (separator !== -1) {
       const block = buffer.slice(0, separator);
-      buffer = buffer.slice(separator + 2);
-      separator = buffer.indexOf('\n\n');
+      buffer = buffer.slice(separator).replace(/^(\r?\n){2}/, '');
+      separator = buffer.search(/\r?\n\r?\n/);
 
       const payload = block
-        .split('\n')
+        .split(/\r?\n/)
         .filter((line) => line.startsWith('data:'))
         .map((line) => line.slice(5).trim())
         .join('');
@@ -112,6 +117,7 @@ async function streamChat(request: ChatRequest): Promise<string> {
         if (chunk.error) throw new ProviderError(chunk.error.message, chunk.error.code);
         const blocked = chunk.promptFeedback?.blockReason;
         if (blocked) throw new ProviderError(`Die Anfrage wurde blockiert (${blocked}).`);
+        if (chunk.candidates?.[0]?.finishReason) finishReason = chunk.candidates[0].finishReason;
         const delta = (chunk.candidates?.[0]?.content?.parts ?? []).map((part) => part.text ?? '').join('');
         if (delta) {
           full += delta;
@@ -123,7 +129,12 @@ async function streamChat(request: ChatRequest): Promise<string> {
       }
     }
   }
-  return full.trim();
+
+  const trimmed = full.trim();
+  if (!trimmed && finishReason && finishReason !== 'STOP') {
+    throw new ProviderError(`Keine Antwort erhalten (${finishReason}). Anderes Modell oder kürzere Nachricht versuchen.`);
+  }
+  return trimmed;
 }
 
 /** Gemini beschreibt Schemas im OpenAPI-Stil. */
@@ -176,6 +187,7 @@ async function lookup(request: LookupRequest) {
         temperature: 0.2,
         responseMimeType: 'application/json',
         responseSchema: LOOKUP_SCHEMA,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   });
