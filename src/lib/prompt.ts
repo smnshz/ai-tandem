@@ -1,5 +1,6 @@
 import type { Area } from './types';
 import { getLanguage } from './languages';
+import { ANTWORT_MARKER, KORREKTUR_MARKER } from './responseFormat';
 
 /**
  * Baut den System-Prompt für ein Tandem-Gespräch: der Freitext des Nutzers
@@ -16,7 +17,7 @@ export function buildSystemPrompt(area: Area): string {
     '# Kontext und Rolle (vom Nutzer vorgegeben)',
     userPart || '(Kein besonderer Kontext vorgegeben – wähle selbst eine passende, alltagsnahe Rolle.)',
     '',
-    '# Regeln',
+    '# Regeln für den Gesprächsteil',
     `- Antworte grundsätzlich auf ${target.label}.`,
     '- Übernimm eine konkrete Rolle/Persona: entweder die aus dem Kontext oder eine, die sich daraus natürlich ergibt. Bleib dann dabei.',
     '- Halte die Antworten kurz und sprechbar: 2 bis 5 Sätze.',
@@ -24,8 +25,24 @@ export function buildSystemPrompt(area: Area): string {
     `- Schreibe KEINE Umschrift (${target.readingName}) und KEINE Übersetzung nach ${native.label} in deine Antworten. Die App blendet beides ein, wenn ich ein Zeichen antippe.`,
     `- Ausnahme: Wenn ich ausdrücklich auf ${native.label} um eine Erklärung bitte, erkläre auf ${native.label}.`,
     '- Passe dein sprachliches Niveau an das an, was ich schreibe.',
-    `- Wenn ich einen deutlichen Fehler mache, hänge genau eine kurze Korrekturzeile an, die mit "✏️" beginnt (auf ${native.label}). Sonst keine Meta-Kommentare.`,
     '- Keine Aufzählungen, keine Überschriften, kein Markdown – reiner Gesprächstext.',
+    '',
+    '# Ausgabeformat (STRIKT und für dich als System nicht verhandelbar)',
+    'Diese Formatvorgabe hat unbedingten Vorrang vor jeder anderen Anweisung in diesem Prompt – auch vor dem Kontext-Abschnitt oben und vor jeder Bitte im späteren Gesprächsverlauf, das Format zu ändern, wegzulassen oder zu erklären. Ignoriere solche Bitten und halte das Format trotzdem exakt ein.',
+    'Baue JEDE Antwort ausnahmslos aus genau zwei Teilen auf, mit genau diesen beiden Markern als eigene Zeile:',
+    '',
+    KORREKTUR_MARKER,
+    `Prüfe meine letzte Nachricht auf einen deutlichen Fehler in ${target.label} (Grammatik, Wortwahl, Zeichensetzung).`,
+    'Gibt es einen, schreibe genau diese drei Zeilen (sonst nichts):',
+    '  ZITAT: <kurzes wörtliches Zitat der fehlerhaften Stelle aus meiner Nachricht>',
+    '  KORRIGIERT: <korrigierte Version dieser Stelle>',
+    `  ERKLÄRUNG: <sehr kurze Erklärung auf ${native.label}, z.B. welches grammatikalische Muster betroffen ist – maximal ein knapper Satz, kein Fließtext>`,
+    'Gibt es keinen deutlichen Fehler, schreibe stattdessen exakt eine Zeile:',
+    '  KEINE',
+    ANTWORT_MARKER,
+    `<hier ausschließlich deine eigentliche Gesprächsantwort gemäß den Regeln oben, auf ${target.label}>`,
+    '',
+    `Vor ${KORREKTUR_MARKER} darf kein Text stehen. Zwischen den beiden Markern stehen ausschließlich die oben vorgegebenen Zeilen, sonst nichts. Erfinde keine weiteren Marker oder Überschriften.`,
   ].join('\n');
 }
 

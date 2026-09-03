@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LookupResult } from '../lib/types';
 import type { LanguageDef } from '../lib/languages';
-import { canSpeak, speak } from '../lib/speech';
+import { canSpeak, speak, stopSpeaking } from '../lib/speech';
 
 export interface LookupState {
   messageId: string;
@@ -27,6 +27,13 @@ export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({ visibility: 'hidden' });
   const [isSheet, setIsSheet] = useState(() => window.innerWidth < MOBILE_BREAKPOINT);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Beim Schließen bzw. bei neuer Auswahl darf keine Sprachausgabe weiterlaufen.
+  useEffect(() => {
+    setIsSpeaking(false);
+    return () => stopSpeaking();
+  }, [state.selection]);
 
   useEffect(() => {
     const onResize = () => setIsSheet(window.innerWidth < MOBILE_BREAKPOINT);
@@ -79,10 +86,18 @@ export function LookupPopup({ state, targetLang, onClose, onAskAi }: Props) {
             {speakable && (
               <button
                 className="icon-btn"
-                title="Vorlesen"
-                onClick={() => speak(state.selection, targetLang.speechLang)}
+                title={isSpeaking ? 'Stoppen' : 'Vorlesen'}
+                onClick={() => {
+                  if (isSpeaking) {
+                    stopSpeaking();
+                    setIsSpeaking(false);
+                    return;
+                  }
+                  setIsSpeaking(true);
+                  speak(state.selection, targetLang.speechLang, { onEnd: () => setIsSpeaking(false) });
+                }}
               >
-                🔊
+                {isSpeaking ? '⏹' : '🔊'}
               </button>
             )}
 
